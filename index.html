@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Translating numerical density into explorable physical space.">
     <title>Oculum | Data Modeling</title>
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300&family=Space+Mono&display=swap" rel="stylesheet">
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700&display=swap" rel="stylesheet">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -18,11 +20,21 @@
                 extend: {
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
+                        display: ['Satoshi', 'sans-serif'],
+                        mono: ['Space Mono', 'monospace'],
                     },
                     colors: {
                         surface: 'rgba(10, 10, 10, 0.65)',
                         surfaceSolid: '#0a0a0a',
+                    },
+                    animation: {
+                        'smooth-bounce': 'smooth-bounce 2.5s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        'smooth-bounce': {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(6px)' },
+                        }
                     }
                 }
             }
@@ -30,11 +42,11 @@
     </script>
 
     <!-- Dependencies -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+    <script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+    <script src="https://unpkg.com/lucide@latest" defer></script>
 
     <style>
         /* Base Resets & Utils */
@@ -45,17 +57,6 @@
         .lenis.lenis-smooth iframe { pointer-events: none; }
         
         body { margin: 0; padding: 0; overscroll-behavior: none; }
-        
-        /* WebGL Canvas */
-        #webgl-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: -1;
-            pointer-events: none;
-        }
 
         /* Typography & Layout Utils */
         .glass-panel {
@@ -68,14 +69,26 @@
         .nav-scrolled {
             background: rgba(5, 5, 5, 0.9);
             backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         /* Hover Transitions */
-        .hover-lift { transition: transform 200ms ease, border-color 200ms ease; }
-        .hover-lift:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.3); }
-        .btn-hover { transition: transform 150ms ease, background-color 150ms ease; }
-        .btn-hover:hover { transform: scale(1.02); }
+        .hover-lift { 
+            transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1), border-color 200ms ease; 
+            will-change: transform;
+        }
+        .hover-lift:hover { 
+            transform: translateY(-4px); 
+            border-color: rgba(255,255,255,0.3); 
+        }
+        .btn-hover { 
+            transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1), background-color 150ms ease; 
+            will-change: transform;
+        }
+        .btn-hover:hover { 
+            transform: scale(1.02); 
+        }
 
         /* Hide Scrollbar */
         ::-webkit-scrollbar { width: 0px; background: transparent; }
@@ -84,50 +97,65 @@
         .accordion-content {
             display: grid;
             grid-template-rows: 0fr;
-            transition: grid-template-rows 300ms ease;
+            transition: grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1);
         }
         .accordion-content.open { grid-template-rows: 1fr; }
         .accordion-inner { overflow: hidden; }
+
+        /* Focus States */
+        .focus-ring-dark {
+            outline: none;
+        }
+        .focus-ring-dark:focus-visible {
+            box-shadow: 0 0 0 2px #000, 0 0 0 4px rgba(255, 255, 255, 0.7);
+            border-radius: 2px;
+        }
+        .focus-ring-light {
+            outline: none;
+        }
+        .focus-ring-light:focus-visible {
+            box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(0, 0, 0, 0.9);
+        }
     </style>
 </head>
-<body class="selection:bg-white selection:text-black">
+<body class="selection:bg-white selection:text-black font-sans font-light">
 
     <!-- WebGL Background -->
-    <div id="webgl-container"></div>
+    <div id="webgl-container" class="fixed inset-0 w-screen h-screen -z-10 pointer-events-none"></div>
 
     <!-- 01 / Navigation -->
-    <nav id="main-nav" class="fixed top-0 left-0 w-full z-50 transition-colors duration-300 py-4 px-6 md:px-12 flex justify-between items-center">
-        <a href="#hero" class="text-xl font-mono tracking-tighter font-medium text-white hover:opacity-70 transition-opacity">OCULUM.</a>
+    <nav id="main-nav" class="fixed top-0 left-0 w-full z-50 transition-colors duration-300 py-4 px-6 md:px-12 flex justify-between items-center" aria-label="Main Navigation">
+        <a href="#hero" class="text-xl font-display font-bold tracking-tighter text-white hover:opacity-70 transition-opacity focus-ring-dark p-1 -m-1" aria-label="Oculum Home">OCULUM.</a>
         
         <!-- Desktop Links -->
         <div class="hidden md:flex items-center space-x-8 text-sm font-mono text-gray-400">
-            <a href="#services" class="hover:text-white transition-colors">Services</a>
-            <a href="#process" class="hover:text-white transition-colors">Process</a>
-            <a href="#proof" class="hover:text-white transition-colors">Proof</a>
-            <a href="#faq" class="hover:text-white transition-colors">FAQ</a>
+            <a href="#services" class="hover:text-white transition-colors focus-ring-dark p-1 -m-1">Services</a>
+            <a href="#process" class="hover:text-white transition-colors focus-ring-dark p-1 -m-1">Process</a>
+            <a href="#proof" class="hover:text-white transition-colors focus-ring-dark p-1 -m-1">Proof</a>
+            <a href="#faq" class="hover:text-white transition-colors focus-ring-dark p-1 -m-1">FAQ</a>
         </div>
 
         <!-- Desktop CTA -->
         <div class="hidden md:block">
-            <a href="#contact" class="btn-hover inline-flex items-center justify-center px-5 py-2.5 bg-white text-black font-mono text-sm tracking-tight rounded-sm">
+            <a href="#contact" class="btn-hover inline-flex items-center justify-center px-5 py-2.5 bg-white text-black font-mono text-sm tracking-tight rounded-sm focus-ring-dark">
                 Initiate Project
             </a>
         </div>
 
         <!-- Mobile Toggle -->
-        <button id="mobile-menu-btn" class="md:hidden text-white p-2 z-50 relative">
+        <button type="button" id="mobile-menu-toggle" class="md:hidden text-white p-2 z-50 relative hover:opacity-70 transition-opacity focus-ring-dark" aria-label="Toggle mobile menu" aria-expanded="false" aria-controls="mobile-menu">
             <i data-lucide="menu" class="w-6 h-6"></i>
         </button>
     </nav>
 
     <!-- Mobile Menu Overlay -->
-    <div id="mobile-menu" class="fixed inset-0 bg-black/95 backdrop-blur-xl z-40 hidden flex-col items-center justify-center opacity-0 transition-opacity duration-300">
+    <div id="mobile-menu" class="fixed inset-0 bg-black/95 backdrop-blur-xl z-40 hidden flex-col items-center justify-center opacity-0 transition-opacity duration-300" aria-hidden="true">
         <div class="flex flex-col space-y-8 text-center font-mono text-xl">
-            <a href="#services" class="mobile-link text-gray-400 hover:text-white">Services</a>
-            <a href="#process" class="mobile-link text-gray-400 hover:text-white">Process</a>
-            <a href="#proof" class="mobile-link text-gray-400 hover:text-white">Proof</a>
-            <a href="#faq" class="mobile-link text-gray-400 hover:text-white">FAQ</a>
-            <a href="#contact" class="mobile-link mt-4 px-8 py-3 bg-white text-black rounded-sm">Initiate Project</a>
+            <a href="#services" class="mobile-nav-item text-gray-400 hover:text-white transition-colors focus-ring-dark p-2">Services</a>
+            <a href="#process" class="mobile-nav-item text-gray-400 hover:text-white transition-colors focus-ring-dark p-2">Process</a>
+            <a href="#proof" class="mobile-nav-item text-gray-400 hover:text-white transition-colors focus-ring-dark p-2">Proof</a>
+            <a href="#faq" class="mobile-nav-item text-gray-400 hover:text-white transition-colors focus-ring-dark p-2">FAQ</a>
+            <a href="#contact" class="mobile-nav-item mt-4 px-8 py-3 bg-white text-black rounded-sm active:scale-95 transition-transform focus-ring-dark">Initiate Project</a>
         </div>
     </div>
 
@@ -137,102 +165,102 @@
         <!-- 02 / Hero -->
         <section id="hero" class="min-h-screen flex flex-col justify-end pb-24 px-6 md:px-12 pt-32">
             <div class="max-w-5xl">
-                <div class="hero-el font-mono text-xs uppercase tracking-widest text-gray-400 mb-8 border-l border-gray-600 pl-4">
+                <div class="hero-el opacity-0 translate-y-5 font-mono text-xs uppercase tracking-widest text-gray-400 mb-8 border-l border-gray-600 pl-4">
                     Seattle · Render Division · 2026
                 </div>
-                <h1 class="hero-el text-5xl md:text-7xl lg:text-8xl font-medium tracking-tight leading-[1.05] mb-8 text-white">
+                <h1 class="hero-el opacity-0 translate-y-5 text-5xl md:text-7xl lg:text-8xl font-display font-bold tracking-tight leading-[1.05] mb-8 text-white">
                     See the exact shape of your data.
                 </h1>
-                <p class="hero-el text-lg md:text-2xl text-gray-300 max-w-2xl mb-12 font-light leading-relaxed">
-                    We turn heavy numerical sets into clear physical models in 48 hours. Locate the exact physical point where your process fails.
+                <p class="hero-el opacity-0 translate-y-5 text-lg md:text-2xl text-gray-300 max-w-2xl mb-12 font-light leading-relaxed">
+                    We turn heavy numerical sets into clear physical models in 48 hours. Locate the exact physical point where your pipeline fails.
                 </p>
-                <div class="hero-el flex flex-col sm:flex-row items-start sm:items-center gap-6">
-                    <a href="#contact" class="btn-hover inline-flex items-center justify-center px-8 py-4 bg-white text-black font-mono text-sm uppercase tracking-wider rounded-sm w-full sm:w-auto">
+                <div class="hero-el opacity-0 translate-y-5 flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                    <a href="#contact" class="btn-hover inline-flex items-center justify-center px-8 py-4 bg-white text-black font-mono text-sm uppercase tracking-wider rounded-sm w-full sm:w-auto focus-ring-dark">
                         Submit Data
                     </a>
-                    <a href="#gallery" class="inline-flex items-center text-sm font-mono text-white hover:text-gray-400 transition-colors group">
+                    <a href="#gallery" class="inline-flex items-center text-sm font-mono text-white hover:text-gray-400 transition-colors group focus-ring-dark p-2 -m-2 rounded-sm">
                         <span class="border-b border-white/30 group-hover:border-transparent pb-1 transition-colors">Review Past Models</span>
                         <i data-lucide="arrow-right" class="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform"></i>
                     </a>
                 </div>
             </div>
             
-            <div class="hero-el absolute bottom-8 left-6 md:left-12 flex items-center gap-3 text-xs font-mono text-gray-500">
+            <div class="hero-el opacity-0 translate-y-5 absolute bottom-8 left-6 md:left-12 flex items-center gap-3 text-xs font-mono text-gray-400">
                 <div class="w-1 h-8 border border-gray-600 rounded-full flex justify-center p-[1px]">
-                    <div class="w-1 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div class="w-1 h-2 bg-gray-400 rounded-full animate-smooth-bounce"></div>
                 </div>
-                Scroll to navigate space
+                Scroll to advance
             </div>
         </section>
 
         <!-- 03 / Trust Bar -->
-        <section id="trust" class="border-y border-white/10 bg-black/50 backdrop-blur-md px-6 md:px-12 py-8 scroll-reveal">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4 divide-x divide-white/5">
-                <div class="flex flex-col pl-0 md:pl-4 first:pl-0 border-l-0">
-                    <span class="font-mono text-2xl text-white mb-1">14 Days</span>
-                    <span class="text-xs font-mono text-gray-500 uppercase tracking-wider">Average Turnaround</span>
+        <section id="trust" class="border-y border-white/10 bg-black/50 backdrop-blur-md px-6 md:px-12 py-8 scroll-reveal opacity-0 translate-y-10">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-y-8 gap-x-4">
+                <div class="flex flex-col pl-0 md:pl-4">
+                    <span class="font-display font-bold text-2xl text-white mb-1">14 Days</span>
+                    <span class="text-xs font-mono text-gray-400 uppercase tracking-wider">Average Turnaround</span>
                 </div>
-                <div class="flex flex-col pl-6">
-                    <span class="font-mono text-2xl text-white mb-1">99.8%</span>
-                    <span class="text-xs font-mono text-gray-500 uppercase tracking-wider">Model Accuracy</span>
+                <div class="flex flex-col pl-4 md:pl-6 border-l border-white/5">
+                    <span class="font-display font-bold text-2xl text-white mb-1">99.8%</span>
+                    <span class="text-xs font-mono text-gray-400 uppercase tracking-wider">Model Accuracy</span>
                 </div>
-                <div class="flex flex-col pl-6 border-l border-white/5 md:border-l-0 lg:border-l">
-                    <span class="font-mono text-2xl text-white mb-1">48 Hours</span>
-                    <span class="text-xs font-mono text-gray-500 uppercase tracking-wider">Initial Render</span>
+                <div class="flex flex-col pl-0 md:pl-6 md:border-l border-white/5">
+                    <span class="font-display font-bold text-2xl text-white mb-1">48 Hours</span>
+                    <span class="text-xs font-mono text-gray-400 uppercase tracking-wider">Initial Render</span>
                 </div>
-                <div class="flex flex-col pl-6 border-l border-white/5 md:border-l-0 lg:border-l">
-                    <span class="font-mono text-2xl text-white mb-1">12</span>
-                    <span class="text-xs font-mono text-gray-500 uppercase tracking-wider">Enterprise Clients</span>
+                <div class="flex flex-col pl-4 md:pl-6 border-l border-white/5">
+                    <span class="font-display font-bold text-2xl text-white mb-1">12</span>
+                    <span class="text-xs font-mono text-gray-400 uppercase tracking-wider">Enterprise Clients</span>
                 </div>
             </div>
         </section>
 
-        <!-- 04 / Problem -> Solution Bridge -->
-        <section id="bridge" class="py-32 px-6 md:px-12 max-w-4xl mx-auto text-center scroll-reveal">
+        <!-- 04 / Conceptual Bridge -->
+        <section id="bridge" class="py-32 px-6 md:px-12 max-w-4xl mx-auto text-center scroll-reveal opacity-0 translate-y-10">
             <p class="text-2xl md:text-4xl font-light leading-relaxed text-gray-300">
-                Large datasets contain physical shapes. We map your raw numbers into a navigable 3D environment. You walk through the model, find the heavy points visually, and adjust your supply line.
+                Large datasets contain physical shapes. We map your raw numbers into an explorable 3D environment. You walk through the model, find the heavy points visually, and adjust your supply chain.
             </p>
         </section>
 
-        <!-- 05 / Services / Offer -->
-        <section id="services" class="py-24 px-6 md:px-12 max-w-7xl mx-auto w-full scroll-reveal">
+        <!-- 05 / Services -->
+        <section id="services" class="py-24 px-6 md:px-12 max-w-7xl mx-auto w-full scroll-reveal opacity-0 translate-y-10">
             <div class="mb-16">
-                <h2 class="text-sm font-mono text-gray-500 uppercase tracking-widest mb-4">Measurement Output</h2>
+                <h2 class="text-sm font-mono text-gray-400 uppercase tracking-widest mb-4">Measurement Output</h2>
                 <div class="h-[1px] w-full bg-white/10"></div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-                <!-- Card 1 (Span 5) -->
+                <!-- Card 1 -->
                 <div class="md:col-span-5 glass-panel p-8 hover-lift rounded-sm">
                     <i data-lucide="bar-chart-3" class="w-8 h-8 text-white mb-6"></i>
-                    <h3 class="text-xl font-mono text-white mb-3">Volume Mapping</h3>
+                    <h3 class="text-xl font-display font-bold text-white mb-3">Volume Mapping</h3>
                     <p class="text-gray-400 text-sm leading-relaxed">
                         We plot usage spikes against server load. The resulting model highlights exact points of failure during high traffic events.
                     </p>
                 </div>
                 
-                <!-- Card 2 (Span 7) -->
-                <div class="md:col-span-7 glass-panel p-8 hover-lift rounded-sm mt-0 md:mt-12">
+                <!-- Card 2 -->
+                <div class="md:col-span-7 glass-panel p-8 hover-lift rounded-sm">
                     <i data-lucide="git-branch" class="w-8 h-8 text-white mb-6"></i>
-                    <h3 class="text-xl font-mono text-white mb-3">Flow Tracking</h3>
+                    <h3 class="text-xl font-display font-bold text-white mb-3">Path Tracking</h3>
                     <p class="text-gray-400 text-sm leading-relaxed">
                         We trace where physical materials stop moving across locations. You see exactly which warehouse creates the delay.
                     </p>
                 </div>
 
-                <!-- Card 3 (Span 7) -->
+                <!-- Card 3 -->
                 <div class="md:col-span-7 glass-panel p-8 hover-lift rounded-sm">
                     <i data-lucide="box" class="w-8 h-8 text-white mb-6"></i>
-                    <h3 class="text-xl font-mono text-white mb-3">Density Models</h3>
+                    <h3 class="text-xl font-display font-bold text-white mb-3">Density Models</h3>
                     <p class="text-gray-400 text-sm leading-relaxed">
                         We assign mass to financial data. The final render locates the heaviest cost centers within your production chain.
                     </p>
                 </div>
 
-                <!-- Card 4 (Span 5) -->
-                <div class="md:col-span-5 glass-panel p-8 hover-lift rounded-sm mt-0 md:-mt-12">
+                <!-- Card 4 -->
+                <div class="md:col-span-5 glass-panel p-8 hover-lift rounded-sm">
                     <i data-lucide="history" class="w-8 h-8 text-white mb-6"></i>
-                    <h3 class="text-xl font-mono text-white mb-3">Timeline Scans</h3>
+                    <h3 class="text-xl font-display font-bold text-white mb-3">Timeline Reviews</h3>
                     <p class="text-gray-400 text-sm leading-relaxed">
                         We compile five years of output history into a single continuous frame. Patterns become visible immediately.
                     </p>
@@ -240,11 +268,11 @@
             </div>
         </section>
 
-        <!-- 06 / How It Works -->
-        <section id="process" class="py-32 px-6 md:px-12 bg-black/60 backdrop-blur-xl border-y border-white/5 scroll-reveal">
+        <!-- 06 / Methodology -->
+        <section id="process" class="py-32 px-6 md:px-12 bg-black/60 backdrop-blur-xl border-y border-white/5 scroll-reveal opacity-0 translate-y-10">
             <div class="max-w-7xl mx-auto w-full">
                 <div class="mb-20">
-                    <h2 class="text-sm font-mono text-gray-500 uppercase tracking-widest mb-4">Implementation</h2>
+                    <h2 class="text-sm font-mono text-gray-400 uppercase tracking-widest mb-4">Implementation</h2>
                     <div class="h-[1px] w-full bg-white/10"></div>
                 </div>
 
@@ -271,7 +299,7 @@
         </section>
 
         <!-- 07 / Proof -->
-        <section id="proof" class="py-32 px-6 md:px-12 max-w-7xl mx-auto w-full scroll-reveal">
+        <section id="proof" class="py-32 px-6 md:px-12 max-w-7xl mx-auto w-full scroll-reveal opacity-0 translate-y-10">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">
                 
                 <div class="flex flex-col gap-12">
@@ -282,7 +310,7 @@
                         </p>
                         <div class="flex flex-col border-t border-white/10 pt-4 mt-4">
                             <span class="font-mono text-white text-sm">Sarah Jenkins</span>
-                            <span class="font-mono text-gray-500 text-xs">Director of Operations, NorthStar</span>
+                            <span class="font-mono text-gray-400 text-xs mt-1">Director of Operations, NorthStar</span>
                         </div>
                     </div>
 
@@ -293,29 +321,29 @@
                         </p>
                         <div class="flex flex-col border-t border-white/10 pt-4 mt-4">
                             <span class="font-mono text-white text-sm">Marcus Webb</span>
-                            <span class="font-mono text-gray-500 text-xs">Lead Infrastructure Engineer, Velo</span>
+                            <span class="font-mono text-gray-400 text-xs mt-1">Lead Infrastructure Engineer, Velo</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="flex flex-col justify-center">
-                    <h2 class="text-3xl md:text-5xl font-light text-white mb-12 leading-tight">Measured Outcomes</h2>
+                    <h2 class="text-3xl md:text-5xl font-display font-bold text-white mb-12 leading-tight">Measured Outcomes</h2>
                     
                     <div class="space-y-8">
                         <div class="border-b border-white/10 pb-6">
                             <div class="flex items-baseline justify-between mb-2">
-                                <span class="text-4xl font-mono text-white">$1.2M</span>
+                                <span class="text-4xl font-display font-bold text-white">$1.2M</span>
                                 <span class="font-mono text-sm tracking-widest text-gray-400 uppercase">Average Savings</span>
                             </div>
-                            <p class="text-sm text-gray-500 font-light">Identified inefficiency costs reduced in year one.</p>
+                            <p class="text-sm text-gray-400 font-light">Identified inefficiency costs reduced in year one.</p>
                         </div>
                         
                         <div class="border-b border-white/10 pb-6">
                             <div class="flex items-baseline justify-between mb-2">
-                                <span class="text-4xl font-mono text-white">100x</span>
+                                <span class="text-4xl font-display font-bold text-white">100x</span>
                                 <span class="font-mono text-sm tracking-widest text-gray-400 uppercase">Speed to insight</span>
                             </div>
-                            <p class="text-sm text-gray-500 font-light">Time spent analyzing visuals versus tabular datasets.</p>
+                            <p class="text-sm text-gray-400 font-light">Time spent analyzing visuals versus tabular datasets.</p>
                         </div>
                     </div>
                 </div>
@@ -324,45 +352,45 @@
         </section>
 
         <!-- 08 / Gallery -->
-        <section id="gallery" class="py-24 w-full bg-black/40 scroll-reveal">
+        <section id="gallery" class="py-24 w-full bg-black/40 scroll-reveal opacity-0 translate-y-10">
             <div class="px-6 md:px-12 mb-12 max-w-7xl mx-auto">
-                <h2 class="text-sm font-mono text-gray-500 uppercase tracking-widest mb-4">Visual Output</h2>
+                <h2 class="text-sm font-mono text-gray-400 uppercase tracking-widest mb-4">Visual Output</h2>
                 <div class="h-[1px] w-full bg-white/10"></div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 px-1">
                 <div class="relative group overflow-hidden aspect-[4/5] bg-gray-900">
-                    <img src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=800" alt="Server Data Map" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105" loading="lazy">
+                    <img src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=800" alt="Server Data Map" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105" loading="lazy" crossorigin="anonymous">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
                         <span class="font-mono text-white text-sm">Server Heat Distribution</span>
                     </div>
                 </div>
                 <div class="relative group overflow-hidden aspect-[4/5] bg-gray-900">
-                    <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=800" alt="Supply Line Render" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105" loading="lazy">
+                    <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=800" alt="Supply Line Render" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105" loading="lazy" crossorigin="anonymous">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
                         <span class="font-mono text-white text-sm">Supply Line Topography</span>
                     </div>
                 </div>
                 <div class="relative group overflow-hidden aspect-[4/5] bg-gray-900">
-                    <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=800" alt="Financial Density Map" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105" loading="lazy">
+                    <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=800" alt="Financial Density Map" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105" loading="lazy" crossorigin="anonymous">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
-                        <span class="font-mono text-white text-sm">Hardware Node Mapping</span>
+                        <span class="font-mono text-white text-sm">Hardware Point Mapping</span>
                     </div>
                 </div>
                 <div class="relative group overflow-hidden aspect-[4/5] bg-gray-900">
-                    <img src="https://images.unsplash.com/photo-1614729939124-032f0b56c9ce?auto=format&fit=crop&q=80&w=800" alt="Traffic Volume" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105" loading="lazy">
+                    <img src="https://images.unsplash.com/photo-1614729939124-032f0b56c9ce?auto=format&fit=crop&q=80&w=800" alt="Traffic Volume" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105" loading="lazy" crossorigin="anonymous">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
                         <span class="font-mono text-white text-sm">Global Traffic Volume</span>
                     </div>
                 </div>
                 <div class="relative group overflow-hidden aspect-[4/5] bg-gray-900">
-                    <img src="https://images.unsplash.com/photo-1506443432602-ac2fcd6f54e0?auto=format&fit=crop&q=80&w=800" alt="Network Clusters" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105" loading="lazy">
+                    <img src="https://images.unsplash.com/photo-1506443432602-ac2fcd6f54e0?auto=format&fit=crop&q=80&w=800" alt="Network Clusters" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105" loading="lazy" crossorigin="anonymous">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
                         <span class="font-mono text-white text-sm">Isolated Network Clusters</span>
                     </div>
                 </div>
                 <div class="relative group overflow-hidden aspect-[4/5] bg-gray-900">
-                    <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=800" alt="Latency Render" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105" loading="lazy">
+                    <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=800" alt="Latency Render" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105" loading="lazy" crossorigin="anonymous">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
                         <span class="font-mono text-white text-sm">Latency Stress Points</span>
                     </div>
@@ -371,30 +399,30 @@
         </section>
 
         <!-- 09 / FAQ -->
-        <section id="faq" class="py-32 px-6 md:px-12 max-w-4xl mx-auto w-full scroll-reveal">
-            <h2 class="text-sm font-mono text-gray-500 uppercase tracking-widest mb-12 border-b border-white/10 pb-4">Parameters</h2>
+        <section id="faq" class="py-32 px-6 md:px-12 max-w-4xl mx-auto w-full scroll-reveal opacity-0 translate-y-10">
+            <h2 class="text-sm font-mono text-gray-400 uppercase tracking-widest mb-12 border-b border-white/10 pb-4">Parameters</h2>
             
             <div class="space-y-2">
                 <!-- FAQ Item -->
                 <div class="border-b border-white/10">
-                    <button class="faq-btn w-full py-6 flex justify-between items-center text-left hover:text-gray-300 transition-colors">
-                        <span class="text-lg md:text-xl font-light">What file formats do you accept?</span>
+                    <button type="button" class="faq-btn w-full py-6 flex justify-between items-center text-left hover:text-gray-300 transition-colors focus-ring-dark rounded-sm" aria-expanded="false" aria-controls="faq-content-1">
+                        <span class="text-lg md:text-xl font-light">What data formats do you accept?</span>
                         <i data-lucide="plus" class="w-5 h-5 text-gray-500 transition-transform duration-300"></i>
                     </button>
-                    <div class="accordion-content">
+                    <div id="faq-content-1" class="accordion-content">
                         <div class="accordion-inner text-gray-400 font-light pb-6 pr-12 text-sm leading-relaxed">
-                            We process raw CSV exports, JSON logs, or establish secure read-only connections to your SQL databases. Data is parsed and discarded immediately after the model generation.
+                            We accept raw CSV exports, JSON logs, or establish read-only connections to your SQL databases. Data is parsed and discarded immediately after the generation is complete.
                         </div>
                     </div>
                 </div>
 
                 <!-- FAQ Item -->
                 <div class="border-b border-white/10">
-                    <button class="faq-btn w-full py-6 flex justify-between items-center text-left hover:text-gray-300 transition-colors">
+                    <button type="button" class="faq-btn w-full py-6 flex justify-between items-center text-left hover:text-gray-300 transition-colors focus-ring-dark rounded-sm" aria-expanded="false" aria-controls="faq-content-2">
                         <span class="text-lg md:text-xl font-light">How much does a mapping cost?</span>
                         <i data-lucide="plus" class="w-5 h-5 text-gray-500 transition-transform duration-300"></i>
                     </button>
-                    <div class="accordion-content">
+                    <div id="faq-content-2" class="accordion-content">
                         <div class="accordion-inner text-gray-400 font-light pb-6 pr-12 text-sm leading-relaxed">
                             Flat pricing starts at $14,000 for a single static dataset up to 500,000 rows. Live connection models with daily updates start at $28,000.
                         </div>
@@ -403,11 +431,11 @@
 
                 <!-- FAQ Item -->
                 <div class="border-b border-white/10">
-                    <button class="faq-btn w-full py-6 flex justify-between items-center text-left hover:text-gray-300 transition-colors">
+                    <button type="button" class="faq-btn w-full py-6 flex justify-between items-center text-left hover:text-gray-300 transition-colors focus-ring-dark rounded-sm" aria-expanded="false" aria-controls="faq-content-3">
                         <span class="text-lg md:text-xl font-light">Do you hold our data on your servers?</span>
                         <i data-lucide="plus" class="w-5 h-5 text-gray-500 transition-transform duration-300"></i>
                     </button>
-                    <div class="accordion-content">
+                    <div id="faq-content-3" class="accordion-content">
                         <div class="accordion-inner text-gray-400 font-light pb-6 pr-12 text-sm leading-relaxed">
                             No. We compile the data into visual geometry files. The initial data source is removed from our environment the moment the 3D generation is complete.
                         </div>
@@ -416,65 +444,65 @@
 
                 <!-- FAQ Item -->
                 <div class="border-b border-white/10">
-                    <button class="faq-btn w-full py-6 flex justify-between items-center text-left hover:text-gray-300 transition-colors">
+                    <button type="button" class="faq-btn w-full py-6 flex justify-between items-center text-left hover:text-gray-300 transition-colors focus-ring-dark rounded-sm" aria-expanded="false" aria-controls="faq-content-4">
                         <span class="text-lg md:text-xl font-light">How long until we see the model?</span>
                         <i data-lucide="plus" class="w-5 h-5 text-gray-500 transition-transform duration-300"></i>
                     </button>
-                    <div class="accordion-content">
+                    <div id="faq-content-4" class="accordion-content">
                         <div class="accordion-inner text-gray-400 font-light pb-6 pr-12 text-sm leading-relaxed">
-                            48 hours from receipt of verified data. You receive an interactive web link and an executive PDF summary highlighting the primary friction points.
+                            48 hours from receipt of verified data. You receive an interactive web URL and an executive PDF summary highlighting the primary friction points.
                         </div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- 10 / Final CTA & 11 / Contact Form Container -->
-        <section id="contact" class="py-32 bg-white text-black scroll-reveal">
+        <!-- 10 / Final CTA & Contact Container -->
+        <section id="contact" class="py-32 bg-white text-black scroll-reveal opacity-0 translate-y-10">
             <div class="max-w-7xl mx-auto px-6 md:px-12 grid grid-cols-1 lg:grid-cols-2 gap-16">
                 
                 <!-- CTA Copy -->
                 <div class="flex flex-col justify-center">
-                    <h2 class="text-4xl md:text-6xl font-medium tracking-tight mb-6">Get the model.<br>Fix the line.</h2>
-                    <p class="text-gray-600 text-lg md:text-xl font-light mb-12 max-w-md leading-relaxed">
+                    <h2 class="text-4xl md:text-6xl font-display font-bold tracking-tight mb-6">Get the model.<br>Fix the line.</h2>
+                    <p class="text-gray-700 text-lg md:text-xl font-light mb-12 max-w-md leading-relaxed">
                         Stop guessing where the bottleneck lives. Send the data and see the exact location this week.
                     </p>
                     <div class="flex items-center gap-4">
                         <span class="font-mono text-sm tracking-widest text-gray-400 uppercase">Direct Line</span>
-                        <a href="mailto:data@oculum.model" class="font-mono text-lg font-medium hover:text-blue-600 transition-colors">data@oculum.model</a>
+                        <a href="mailto:data@oculum.model" class="font-mono text-lg text-black hover:text-blue-600 transition-colors focus-ring-light p-1 -m-1 rounded-sm">data@oculum.model</a>
                     </div>
                 </div>
 
-                <!-- Contact Form -->
+                <!-- Contact Inputs -->
                 <div class="bg-gray-100 p-8 md:p-12 rounded-sm border border-gray-200 relative overflow-hidden">
                     
-                    <div id="form-success" class="absolute inset-0 bg-gray-900 text-white flex-col items-center justify-center hidden z-20 transition-opacity duration-300">
+                    <div id="inquiry-success" class="absolute inset-0 bg-gray-900 text-white flex-col items-center justify-center hidden opacity-0 z-20 transition-opacity duration-300">
                         <i data-lucide="check-circle" class="w-12 h-12 mb-4 text-green-400"></i>
-                        <h3 class="text-2xl mb-2 font-medium">Request Received</h3>
+                        <h3 class="text-2xl mb-2 font-display font-bold">Request Received</h3>
                         <p class="text-gray-400 text-sm font-light text-center px-8">We will review your parameters and respond within 2 hours with upload instructions.</p>
-                        <button id="form-reset" class="mt-8 font-mono text-sm text-gray-400 hover:text-white border-b border-gray-600 pb-1">Submit another</button>
+                        <button type="button" id="inquiry-reset" class="mt-8 font-mono text-sm text-gray-400 hover:text-white border-b border-gray-600 pb-1 transition-colors focus-ring-dark rounded-sm">Submit another</button>
                     </div>
 
-                    <form id="project-form" class="space-y-6 relative z-10">
+                    <form id="project-inquiry" class="space-y-6 relative z-10">
                         <div>
-                            <label for="name" class="block text-xs font-mono uppercase tracking-widest text-gray-500 mb-2">Lead Contact</label>
-                            <input type="text" id="name" required class="w-full bg-white border border-gray-300 px-4 py-3 font-mono text-sm focus:outline-none focus:border-black transition-colors" placeholder="Full Name">
+                            <label for="name" class="block text-xs font-mono uppercase tracking-widest text-gray-700 mb-2">Lead Contact</label>
+                            <input type="text" id="name" required class="w-full bg-white border border-gray-300 px-4 py-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-shadow rounded-sm" placeholder="Full Name">
                         </div>
                         <div>
-                            <label for="email" class="block text-xs font-mono uppercase tracking-widest text-gray-500 mb-2">Work Email</label>
-                            <input type="email" id="email" required class="w-full bg-white border border-gray-300 px-4 py-3 font-mono text-sm focus:outline-none focus:border-black transition-colors" placeholder="address@company.com">
+                            <label for="email" class="block text-xs font-mono uppercase tracking-widest text-gray-700 mb-2">Work Email</label>
+                            <input type="email" id="email" required class="w-full bg-white border border-gray-300 px-4 py-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-shadow rounded-sm" placeholder="address@company.com">
                         </div>
                         <div>
-                            <label for="size" class="block text-xs font-mono uppercase tracking-widest text-gray-500 mb-2">Estimated Dataset Size</label>
-                            <select id="size" class="w-full bg-white border border-gray-300 px-4 py-3 font-mono text-sm focus:outline-none focus:border-black transition-colors appearance-none">
+                            <label for="size" class="block text-xs font-mono uppercase tracking-widest text-gray-700 mb-2">Estimated Dataset Size</label>
+                            <select id="size" class="w-full bg-white border border-gray-300 px-4 py-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-shadow appearance-none rounded-sm cursor-pointer">
                                 <option value="small">Under 100,000 rows</option>
                                 <option value="medium">100,000 - 1 Million rows</option>
                                 <option value="large">1 Million+ rows</option>
                                 <option value="live">Live Database Connection</option>
                             </select>
                         </div>
-                        <button type="submit" class="btn-hover w-full bg-black text-white font-mono uppercase tracking-wider text-sm py-4 mt-4 rounded-sm flex justify-center items-center">
-                            Submit Request
+                        <button type="submit" class="btn-hover w-full bg-black text-white font-mono uppercase tracking-wider text-sm py-4 mt-4 rounded-sm flex justify-center items-center focus-ring-light border border-transparent">
+                            <span>Submit Request</span>
                         </button>
                     </form>
                 </div>
@@ -482,34 +510,34 @@
             </div>
         </section>
 
-        <!-- 12 / Footer -->
+        <!-- 11 / Footer -->
         <footer class="bg-black pt-20 pb-10 border-t border-white/10 px-6 md:px-12 relative z-10">
             <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-end gap-12">
                 
                 <div class="flex flex-col">
-                    <span class="text-2xl font-mono tracking-tighter font-medium text-white mb-6">OCULUM.</span>
-                    <span class="text-gray-500 text-sm font-light max-w-xs">
-                        Translating numerical density into navigable physical space.
+                    <span class="text-2xl font-display font-bold tracking-tighter text-white mb-6">OCULUM.</span>
+                    <span class="text-gray-400 text-sm font-light max-w-xs">
+                        Translating numerical density into explorable physical space.
                     </span>
                 </div>
 
                 <div class="grid grid-cols-2 gap-12 md:gap-24">
                     <div class="flex flex-col space-y-4 font-mono text-sm text-gray-400">
-                        <a href="#services" class="hover:text-white transition-colors">Services</a>
-                        <a href="#process" class="hover:text-white transition-colors">Process</a>
-                        <a href="#proof" class="hover:text-white transition-colors">Proof</a>
-                        <a href="#faq" class="hover:text-white transition-colors">FAQ</a>
+                        <a href="#services" class="hover:text-white transition-colors focus-ring-dark p-1 -m-1 rounded-sm">Services</a>
+                        <a href="#process" class="hover:text-white transition-colors focus-ring-dark p-1 -m-1 rounded-sm">Process</a>
+                        <a href="#proof" class="hover:text-white transition-colors focus-ring-dark p-1 -m-1 rounded-sm">Proof</a>
+                        <a href="#faq" class="hover:text-white transition-colors focus-ring-dark p-1 -m-1 rounded-sm">FAQ</a>
                     </div>
                     <div class="flex flex-col space-y-4 font-mono text-sm text-gray-400">
-                        <a href="mailto:data@oculum.model" class="hover:text-white transition-colors">Contact</a>
-                        <span class="text-gray-600">Seattle, WA</span>
-                        <span class="text-gray-600">Model Div 01</span>
+                        <a href="mailto:data@oculum.model" class="hover:text-white transition-colors focus-ring-dark p-1 -m-1 rounded-sm">Contact</a>
+                        <span class="text-gray-600 cursor-default">Seattle, WA</span>
+                        <span class="text-gray-600 cursor-default">Model Div 01</span>
                     </div>
                 </div>
 
             </div>
             
-            <div class="max-w-7xl mx-auto mt-20 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center text-xs font-mono text-gray-600">
+            <div class="max-w-7xl mx-auto mt-20 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center text-xs font-mono text-gray-400">
                 <span>&copy; 2026 Oculum Data Rendering.</span>
                 <span class="mt-4 md:mt-0">All models purged post-delivery.</span>
             </div>
@@ -517,350 +545,358 @@
 
     </main>
 
-    <!-- Application Logic -->
+    <!-- Application Interaction -->
     <script>
-        // 1. Initialize Icons
-        lucide.createIcons();
-
-        // 2. Three.js Raymarching Setup
-        const initWebGL = () => {
-            const container = document.getElementById('webgl-container');
-            const scene = new THREE.Scene();
+        // Trigger scripts after DOM is ready
+        window.addEventListener('DOMContentLoaded', () => {
             
-            const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
-            camera.position.z = 1;
+            // 1. Initialize Icons
+            lucide.createIcons();
 
-            const renderer = new THREE.WebGLRenderer({ alpha: false, antialias: false });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            container.appendChild(renderer.domElement);
+            // 2. Three.js Raymarching Setup
+            const initWebGL = () => {
+                const container = document.getElementById('webgl-container');
+                const scene = new THREE.Scene();
+                
+                const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+                camera.position.z = 1;
 
-            // Fragment Shader for Abstract Fractal World
-            const fragmentShader = `
-                uniform float u_time;
-                uniform vec2 u_resolution;
-                uniform vec2 u_mouse;
-                uniform float u_scroll;
-
-                #define MAX_STEPS 120
-                #define MAX_DIST 40.0
-                #define SURF_DIST 0.01
-
-                // Rotation Matrix
-                mat2 rot(float a) {
-                    float s = sin(a), c = cos(a);
-                    return mat2(c, -s, s, c);
-                }
-
-                // Smooth Min for organic blending
-                float smin( float a, float b, float k ) {
-                    float h = clamp( 0.5+0.5*(b-a)/k, 0.0, 1.0 );
-                    return mix( b, a, h ) - k*h*(1.0-h);
-                }
-
-                // Distance functions
-                float sdSphere(vec3 p, float s) { return length(p) - s; }
-                float sdBox(vec3 p, vec3 b) {
-                    vec3 q = abs(p) - b;
-                    return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
-                }
-
-                // Space mapping
-                float map(vec3 p) {
-                    vec3 p1 = p;
-                    
-                    // Continuous forward movement
-                    p1.z += u_time * 1.5 + u_scroll * 12.0;
-                    
-                    // Mouse distortion
-                    p1.xy *= rot(u_mouse.x * 0.5);
-                    p1.yz *= rot(u_mouse.y * 0.5);
-
-                    // Repetition grid
-                    vec3 q = p1;
-                    q.x = mod(q.x + 4.0, 8.0) - 4.0;
-                    q.z = mod(q.z + 4.0, 8.0) - 4.0;
-
-                    // Central twisting column
-                    vec3 c = p1;
-                    c.xz *= rot(c.y * 0.2 + u_time * 0.4);
-                    float column = length(c.xz) - 1.5 + sin(c.y * 2.0)*0.3;
-
-                    // Repeating objects
-                    float sphere = sdSphere(q + vec3(0.0, sin(u_time + q.x)*1.5, 0.0), 1.2);
-                    float box = sdBox(q + vec3(sin(u_time)*0.5, cos(u_time*0.8)*0.5, 0.0), vec3(0.8));
-                    
-                    float objects = smin(sphere, box, 1.2);
-
-                    // Combine and create hollow space
-                    float finalMap = smin(objects, column, 2.0);
-                    
-                    return finalMap;
-                }
-
-                // Calculate Normal
-                vec3 getNormal(vec3 p) {
-                    float d = map(p);
-                    vec2 e = vec2(.01, 0);
-                    vec3 n = d - vec3(
-                        map(p-e.xyy),
-                        map(p-e.yxy),
-                        map(p-e.yyx));
-                    return normalize(n);
-                }
-
-                void main() {
-                    vec2 uv = (gl_FragCoord.xy - .5 * u_resolution.xy) / u_resolution.y;
-                    
-                    // Camera Ray Setup
-                    vec3 ro = vec3(0.0, 0.0, -3.0); // Origin
-                    vec3 rd = normalize(vec3(uv.x, uv.y, 1.0)); // Direction
-
-                    // Raymarching Loop
-                    float dO = 0.0;
-                    vec3 p;
-                    for(int i = 0; i < MAX_STEPS; i++) {
-                        p = ro + rd * dO;
-                        float dS = map(p);
-                        dO += dS * 0.5; // Multiplier prevents overshooting twisted space
-                        if(dO > MAX_DIST || abs(dS) < SURF_DIST) break;
-                    }
-
-                    // Background color (very dark violet/black)
-                    vec3 col = vec3(0.02, 0.01, 0.03); 
-
-                    if(dO < MAX_DIST) {
-                        vec3 n = getNormal(p);
-                        vec3 lightDir = normalize(vec3(1.0, 2.0, -1.0));
-                        
-                        // Lighting
-                        float dif = clamp(dot(n, lightDir), 0.0, 1.0);
-                        float amb = 0.2 + 0.3 * clamp(0.5 + 0.5 * n.y, 0.0, 1.0);
-                        
-                        // Color palette shifting based on normal and position
-                        vec3 baseColor = 0.5 + 0.5 * cos(u_time*0.5 + p.xyx * 0.2 + vec3(0,2,4));
-                        
-                        col = baseColor * dif + baseColor * amb;
-                        
-                        // Edge highlight / rim lighting
-                        float rim = 1.0 - max(dot(n, -rd), 0.0);
-                        rim = smoothstep(0.6, 1.0, rim);
-                        col += vec3(0.5, 0.7, 1.0) * rim * 0.5;
-                    }
-
-                    // Fog
-                    col = mix(col, vec3(0.02, 0.01, 0.03), 1.0 - exp(-0.02 * dO * dO));
-
-                    // Output
-                    gl_FragColor = vec4(col, 1.0);
-                }
-            `;
-
-            const uniforms = {
-                u_time: { value: 0.0 },
-                u_resolution: { value: new THREE.Vector2() },
-                u_mouse: { value: new THREE.Vector2(0,0) },
-                u_scroll: { value: 0.0 }
-            };
-
-            const material = new THREE.ShaderMaterial({
-                fragmentShader,
-                uniforms,
-                depthWrite: false,
-                depthTest: false
-            });
-
-            const plane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
-            scene.add(plane);
-
-            // Resize Handler
-            const onWindowResize = () => {
+                const renderer = new THREE.WebGLRenderer({ alpha: false, antialias: false });
                 renderer.setSize(window.innerWidth, window.innerHeight);
-                uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
-            };
-            window.addEventListener('resize', onWindowResize);
-            onWindowResize();
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                container.appendChild(renderer.domElement);
 
-            // Mouse Handler for distortion
-            let targetMouse = { x: 0, y: 0 };
-            window.addEventListener('mousemove', (e) => {
-                targetMouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-                targetMouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                // Fragment Shader for Abstract Fractal World
+                const fragmentShader = `
+                    uniform float u_time;
+                    uniform vec2 u_resolution;
+                    uniform vec2 u_mouse;
+                    uniform float u_scroll;
+
+                    #define MAX_STEPS 120
+                    #define MAX_DIST 40.0
+                    #define SURF_DIST 0.01
+
+                    mat2 rot(float a) {
+                        float s = sin(a), c = cos(a);
+                        return mat2(c, -s, s, c);
+                    }
+
+                    float smin( float a, float b, float k ) {
+                        float h = clamp( 0.5+0.5*(b-a)/k, 0.0, 1.0 );
+                        return mix( b, a, h ) - k*h*(1.0-h);
+                    }
+
+                    float sdSphere(vec3 p, float s) { return length(p) - s; }
+                    float sdBox(vec3 p, vec3 b) {
+                        vec3 q = abs(p) - b;
+                        return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
+                    }
+
+                    float map(vec3 p) {
+                        vec3 p1 = p;
+                        
+                        p1.z += u_time * 2.0 + u_scroll * 20.0;
+                        
+                        p1.xy *= rot(u_mouse.x * 0.2);
+                        
+                        // Hollow twisting tunnel along Z axis
+                        vec3 c = p1;
+                        c.xy *= rot(c.z * 0.05 + u_time * 0.1);
+                        float tube = 5.0 - length(c.xy) + sin(c.z * 0.5)*0.5;
+
+                        // Repetition layout for floating data points
+                        vec3 q = p1;
+                        q.z = mod(q.z + 5.0, 10.0) - 5.0;
+                        
+                        vec3 o1 = q + vec3( 2.5 * cos(u_time),  2.5 * sin(u_time), 0.0);
+                        vec3 o2 = q + vec3(-2.5 * cos(u_time*0.8), -2.5 * sin(u_time*0.8), 2.0);
+                        
+                        float d1 = sdSphere(o1, 1.0);
+                        float d2 = sdBox(o2, vec3(0.7));
+                        
+                        float objects = smin(d1, d2, 1.5);
+                        
+                        // Combine hollow tube and peripheral objects
+                        return smin(objects, tube, 2.0);
+                    }
+
+                    vec3 getNormal(vec3 p) {
+                        float d = map(p);
+                        vec2 e = vec2(.01, 0);
+                        vec3 n = d - vec3(
+                            map(p-e.xyy),
+                            map(p-e.yxy),
+                            map(p-e.yyx));
+                        return normalize(n);
+                    }
+
+                    void main() {
+                        vec2 uv = (gl_FragCoord.xy - .5 * u_resolution.xy) / u_resolution.y;
+                        
+                        vec3 ro = vec3(0.0, 0.0, -3.0); 
+                        vec3 rd = normalize(vec3(uv.x, uv.y, 1.0));
+
+                        float dO = 0.0;
+                        vec3 p;
+                        for(int i = 0; i < MAX_STEPS; i++) {
+                            p = ro + rd * dO;
+                            float dS = map(p);
+                            dO += dS * 0.5;
+                            if(dO > MAX_DIST || abs(dS) < SURF_DIST) break;
+                        }
+
+                        // Cohesive, shifting background palette replacing pure black
+                        vec3 bgCol = 0.12 + 0.08 * cos(u_time * 0.15 + uv.xyx * 0.8 + vec3(0.0, 2.0, 4.0));
+                        vec3 col = bgCol; 
+
+                        if(dO < MAX_DIST) {
+                            vec3 n = getNormal(p);
+                            vec3 lightDir = normalize(vec3(1.0, 2.0, -1.0));
+                            
+                            float dif = clamp(dot(n, lightDir), 0.0, 1.0);
+                            float amb = 0.2 + 0.3 * clamp(0.5 + 0.5 * n.y, 0.0, 1.0);
+                            
+                            // Vivid complementary oscillation for geometry
+                            vec3 baseColor = 0.45 + 0.45 * cos(u_time * 0.3 + p.z * 0.1 + vec3(0.0, 1.5, 3.0));
+                            
+                            col = baseColor * dif + baseColor * amb;
+                            
+                            float rim = 1.0 - max(dot(n, -rd), 0.0);
+                            rim = smoothstep(0.6, 1.0, rim);
+                            col += vec3(0.5, 0.7, 1.0) * rim * 0.5;
+                        }
+
+                        // Fog fades into the animated background color
+                        col = mix(col, bgCol, 1.0 - exp(-0.012 * dO * dO));
+
+                        gl_FragColor = vec4(col, 1.0);
+                    }
+                `;
+
+                const uniforms = {
+                    u_time: { value: 0.0 },
+                    u_resolution: { value: new THREE.Vector2() },
+                    u_mouse: { value: new THREE.Vector2(0,0) },
+                    u_scroll: { value: 0.0 }
+                };
+
+                const material = new THREE.ShaderMaterial({
+                    fragmentShader,
+                    uniforms,
+                    depthWrite: false,
+                    depthTest: false
+                });
+
+                const planeObj = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+                scene.add(planeObj);
+
+                const onWindowResize = () => {
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                    uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
+                };
+                window.addEventListener('resize', onWindowResize);
+                onWindowResize();
+
+                let aimMouse = { x: 0, y: 0 };
+                window.addEventListener('mousemove', (e) => {
+                    aimMouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                    aimMouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                });
+
+                return { renderer, scene, camera, uniforms, aimMouse };
+            };
+
+            const webgl = initWebGL();
+
+            // 3. Lenis Scrolling Setup
+            const lenis = new Lenis({
+                duration: 1.2,
+                easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+                direction: 'vertical',
+                gestureDirection: 'vertical',
+                smooth: true,
+                mouseMultiplier: 1,
+                smoothTouch: false,
+                touchMultiplier: 2,
             });
 
-            return { renderer, scene, camera, uniforms, targetMouse };
-        };
+            lenis.on('scroll', ScrollTrigger.update);
+            gsap.ticker.add((time)=>{ lenis.raf(time * 1000) });
+            gsap.ticker.lagSmoothing(0, 0);
 
-        const webgl = initWebGL();
+            lenis.on('scroll', (e) => {
+                const progress = e.limit > 0 ? e.scroll / e.limit : 0;
+                webgl.uniforms.u_scroll.value = progress;
+                
+                const nav = document.getElementById('main-nav');
+                if(e.scroll > 80) {
+                    nav.classList.add('nav-scrolled');
+                } else {
+                    nav.classList.remove('nav-scrolled');
+                }
+            });
 
-        // 3. Lenis Smooth Scroll Setup
-        const lenis = new Lenis({
-            duration: 1.2,
-            easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-            direction: 'vertical',
-            gestureDirection: 'vertical',
-            smooth: true,
-            mouseMultiplier: 1,
-            smoothTouch: false,
-            touchMultiplier: 2,
-        });
+            // 4. Main Animation Loop
+            const clock = new THREE.Clock();
+            const animate = () => {
+                requestAnimationFrame(animate);
+                
+                webgl.uniforms.u_time.value = clock.getElapsedTime();
+                
+                webgl.uniforms.u_mouse.value.x += (webgl.aimMouse.x - webgl.uniforms.u_mouse.value.x) * 0.05;
+                webgl.uniforms.u_mouse.value.y += (webgl.aimMouse.y - webgl.uniforms.u_mouse.value.y) * 0.05;
 
-        // Sync Lenis to GSAP ScrollTrigger
-        lenis.on('scroll', ScrollTrigger.update);
-        gsap.ticker.add((time)=>{ lenis.raf(time * 1000) });
-        gsap.ticker.lagSmoothing(0, 0);
+                webgl.renderer.render(webgl.scene, webgl.camera);
+            };
+            animate();
 
-        // Track overall scroll progress for shader uniform
-        lenis.on('scroll', (e) => {
-            const maxScroll = document.body.scrollHeight - window.innerHeight;
-            const progress = e.scroll / maxScroll;
-            webgl.uniforms.u_scroll.value = progress;
-            
-            // Nav background toggle
-            const nav = document.getElementById('main-nav');
-            if(e.scroll > 80) {
-                nav.classList.add('nav-scrolled');
-            } else {
-                nav.classList.remove('nav-scrolled');
-            }
-        });
+            // 5. GSAP DOM Animations
+            gsap.to('.hero-el', { 
+                opacity: 1, 
+                y: 0, 
+                duration: 1, 
+                stagger: 0.15, 
+                ease: "power3.out", 
+                delay: 0.2 
+            });
 
-        // 4. Main Animation Loop
-        const clock = new THREE.Clock();
-        const animate = () => {
-            requestAnimationFrame(animate);
-            
-            // Update time
-            webgl.uniforms.u_time.value = clock.getElapsedTime();
-            
-            // Smooth mouse interpolation
-            webgl.uniforms.u_mouse.value.x += (webgl.targetMouse.x - webgl.uniforms.u_mouse.value.x) * 0.05;
-            webgl.uniforms.u_mouse.value.y += (webgl.targetMouse.y - webgl.uniforms.u_mouse.value.y) * 0.05;
-
-            webgl.renderer.render(webgl.scene, webgl.camera);
-        };
-        animate();
-
-        // 5. GSAP DOM Animations
-        
-        // Hero Entrance Stagger
-        gsap.fromTo('.hero-el', 
-            { opacity: 0, y: 20 },
-            { opacity: 1, y: 0, duration: 1, stagger: 0.15, ease: "power3.out", delay: 0.2 }
-        );
-
-        // Section Reveals
-        const revealElements = document.querySelectorAll('.scroll-reveal');
-        revealElements.forEach(el => {
-            gsap.fromTo(el, 
-                { opacity: 0, y: 40 },
-                {
-                    opacity: 1, y: 0, duration: 1, ease: "power2.out",
+            const revealElements = document.querySelectorAll('.scroll-reveal');
+            revealElements.forEach(el => {
+                gsap.to(el, {
+                    opacity: 1, 
+                    y: 0, 
+                    duration: 1, 
+                    ease: "power2.out",
                     scrollTrigger: {
                         trigger: el,
                         start: "top 85%",
                         toggleActions: "play none none reverse"
                     }
-                }
-            );
-        });
-
-        // 6. UI Interactions
-        
-        // Mobile Menu Toggle
-        const menuBtn = document.getElementById('mobile-menu-btn');
-        const mobileMenu = document.getElementById('mobile-menu');
-        const mobileLinks = document.querySelectorAll('.mobile-link');
-        let menuOpen = false;
-
-        const toggleMenu = () => {
-            menuOpen = !menuOpen;
-            if(menuOpen) {
-                mobileMenu.classList.remove('hidden');
-                // Small delay to allow display:block to apply before opacity transition
-                setTimeout(() => mobileMenu.classList.remove('opacity-0'), 10);
-                lenis.stop();
-            } else {
-                mobileMenu.classList.add('opacity-0');
-                setTimeout(() => mobileMenu.classList.add('hidden'), 300);
-                lenis.start();
-            }
-        };
-
-        menuBtn.addEventListener('click', toggleMenu);
-        mobileMenu.addEventListener('click', (e) => {
-            if(e.target === mobileMenu) toggleMenu(); // Close on outside tap
-        });
-        mobileLinks.forEach(link => {
-            link.addEventListener('click', toggleMenu); // Close on link click
-        });
-
-        // Anchor Link Scroll Overrides
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                const targetId = this.getAttribute('href');
-                if(targetId === '#') return;
-                const targetEl = document.querySelector(targetId);
-                if(targetEl) {
-                    lenis.scrollTo(targetEl, { offset: -80 });
-                }
+                });
             });
-        });
 
-        // FAQ Accordion
-        const faqBtns = document.querySelectorAll('.faq-btn');
-        faqBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const content = btn.nextElementSibling;
-                const icon = btn.querySelector('i');
-                const isOpen = content.classList.contains('open');
+            // 6. UI Interactions
+            const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+            const mobileMenu = document.getElementById('mobile-menu');
+            const mobileNavItems = document.querySelectorAll('.mobile-nav-item');
+            let menuOpen = false;
+
+            const toggleMenu = () => {
+                menuOpen = !menuOpen;
+                const iconEl = mobileMenuToggle.querySelector('i');
                 
-                // Close all others
-                document.querySelectorAll('.accordion-content').forEach(c => c.classList.remove('open'));
-                document.querySelectorAll('.faq-btn i').forEach(i => i.style.transform = 'rotate(0deg)');
-
-                if(!isOpen) {
-                    content.classList.add('open');
-                    icon.style.transform = 'rotate(45deg)';
+                if(menuOpen) {
+                    mobileMenu.classList.remove('hidden');
+                    mobileMenu.classList.add('flex');
+                    mobileMenuToggle.setAttribute('aria-expanded', 'true');
+                    
+                    requestAnimationFrame(() => {
+                        mobileMenu.classList.remove('opacity-0');
+                        mobileMenu.classList.add('opacity-100');
+                    });
+                    
+                    iconEl.setAttribute('data-lucide', 'x');
+                    lenis.stop();
+                } else {
+                    mobileMenu.classList.remove('opacity-100');
+                    mobileMenu.classList.add('opacity-0');
+                    mobileMenuToggle.setAttribute('aria-expanded', 'false');
+                    
+                    setTimeout(() => {
+                        mobileMenu.classList.add('hidden');
+                        mobileMenu.classList.remove('flex');
+                    }, 300);
+                    
+                    iconEl.setAttribute('data-lucide', 'menu');
+                    lenis.start();
                 }
+                lucide.createIcons({ nameAttr: 'data-lucide', icons: { Menu: lucide.icons.Menu, X: lucide.icons.X } });
+            };
+
+            mobileMenuToggle.addEventListener('click', toggleMenu);
+            mobileMenu.addEventListener('click', (e) => {
+                if(e.target === mobileMenu) toggleMenu();
+            });
+            mobileNavItems.forEach(item => {
+                item.addEventListener('click', toggleMenu);
+            });
+
+            // Anchor Reference Scroll Overrides
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href');
+                    if(targetId === '#') return;
+                    const targetEl = document.querySelector(targetId);
+                    if(targetEl) {
+                        lenis.scrollTo(targetEl, { offset: -80 });
+                    }
+                });
+            });
+
+            // FAQ Accordion
+            const faqBtns = document.querySelectorAll('.faq-btn');
+            faqBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const content = btn.nextElementSibling;
+                    const icon = btn.querySelector('i');
+                    const isOpen = content.classList.contains('open');
+                    
+                    document.querySelectorAll('.accordion-content').forEach(c => {
+                        c.classList.remove('open');
+                    });
+                    document.querySelectorAll('.faq-btn').forEach(b => {
+                        b.setAttribute('aria-expanded', 'false');
+                        b.querySelector('i').style.transform = 'rotate(0deg)';
+                    });
+
+                    if(!isOpen) {
+                        content.classList.add('open');
+                        btn.setAttribute('aria-expanded', 'true');
+                        icon.style.transform = 'rotate(45deg)';
+                    }
+                });
+            });
+
+            // Contact Submission Logic
+            const inquiryData = document.getElementById('project-inquiry');
+            const successUI = document.getElementById('inquiry-success');
+            const resetBtn = document.getElementById('inquiry-reset');
+
+            inquiryData.addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                const btn = inquiryData.querySelector('button[type="submit"]');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<span>Processing...</span>';
+                btn.classList.add('opacity-70', 'cursor-not-allowed', 'pointer-events-none');
+
+                setTimeout(() => {
+                    successUI.classList.remove('hidden');
+                    successUI.classList.add('flex');
+                    
+                    requestAnimationFrame(() => {
+                        successUI.classList.remove('opacity-0');
+                        successUI.classList.add('opacity-100');
+                    });
+                    
+                    btn.innerHTML = originalText;
+                    btn.classList.remove('opacity-70', 'cursor-not-allowed', 'pointer-events-none');
+                    inquiryData.reset();
+                }, 800);
+            });
+
+            resetBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                successUI.classList.remove('opacity-100');
+                successUI.classList.add('opacity-0');
+                setTimeout(() => {
+                    successUI.classList.add('hidden');
+                    successUI.classList.remove('flex');
+                }, 300);
             });
         });
-
-        // Contact Form Logic
-        const form = document.getElementById('project-form');
-        const successState = document.getElementById('form-success');
-        const resetBtn = document.getElementById('form-reset');
-
-        form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            
-            // Simulate API request processing
-            const btn = form.querySelector('button[type="submit"]');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = 'Processing...';
-            btn.style.opacity = '0.7';
-
-            setTimeout(() => {
-                successState.classList.remove('hidden');
-                successState.style.display = 'flex';
-                // Trigger opacity fade
-                setTimeout(() => successState.classList.remove('opacity-0'), 10);
-                btn.innerHTML = originalText;
-                btn.style.opacity = '1';
-                form.reset();
-            }, 800);
-        });
-
-        resetBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            successState.classList.add('opacity-0');
-            setTimeout(() => {
-                successState.classList.add('hidden');
-                successState.style.display = 'none';
-            }, 300);
-        });
-
     </script>
 </body>
 </html>
